@@ -182,7 +182,17 @@ class Audio:
                 array, sampling_rate = sf.read(f)
 
         else:
-            array, sampling_rate = sf.read(file)
+            # array, sampling_rate = sf.read(file)
+
+            import subprocess
+            pipe = subprocess.Popen(
+                ["ffmpeg", "-i", "-", "-f", "f32le", "-"], stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                stdin=subprocess.PIPE
+            )
+            with pipe.stdin:
+                pipe.stdin.write(file.read())
+            array = np.frombuffer(buffer=pipe.stdout.read(), dtype=np.float32)
+            sampling_rate = 16000
 
         array = array.T
         if self.mono:
