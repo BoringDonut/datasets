@@ -182,8 +182,8 @@ class Audio:
                 array, sampling_rate = sf.read(f)
 
         else:
-            ext = os.path.splitext(path)[-1].lower()
-            if ext in ['.flac', '.mat', '.ogg', '.wav']:
+            sf_formats = [x.lower() for x in sf.available_formats().keys()] + ["opus", "mp3"]
+            if audio_format in sf_formats:
                 array, sampling_rate = sf.read(file)
             else:
                 array, sampling_rate = read_ffmpeg(file)
