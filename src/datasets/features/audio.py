@@ -1,7 +1,7 @@
 import os
 from dataclasses import dataclass, field
 from io import BytesIO
-from typing import TYPE_CHECKING, Any, ClassVar, Dict, Optional, Union
+from typing import TYPE_CHECKING, Any, ClassVar, Dict, Optional, Union, Tuple
 
 import numpy as np
 import pyarrow as pa
@@ -182,17 +182,11 @@ class Audio:
                 array, sampling_rate = sf.read(f)
 
         else:
-            # array, sampling_rate = sf.read(file)
-
-            import subprocess
-            pipe = subprocess.Popen(
-                ["ffmpeg", "-i", "-", "-f", "f32le", "-"], stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                stdin=subprocess.PIPE
-            )
-            with pipe.stdin:
-                pipe.stdin.write(file.read())
-            array = np.frombuffer(buffer=pipe.stdout.read(), dtype=np.float32)
-            sampling_rate = 16000
+            ext = os.path.splitext(path)[-1].lower()
+            if ext in ['.flac', '.mat', '.ogg', '.wav']:
+                array, sampling_rate = sf.read(file)
+            else:
+                array, sampling_rate = read_ffmpeg(file)
 
         array = array.T
         if self.mono:
@@ -283,3 +277,21 @@ class Audio:
         )
         storage = pa.StructArray.from_arrays([bytes_array, path_array], ["bytes", "path"], mask=bytes_array.is_null())
         return array_cast(storage, self.pa_type)
+
+
+def read_ffmpeg(file) -> Tuple[np.array, int]:
+    import re
+    import subprocess
+    pipe = subprocess.Popen(
+        ["ffmpeg", "-i", "-", "-f", "f32le", "-"], stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        stdin=subprocess.PIPE
+    )
+    with pipe.stdin:
+        pipe.stdin.write(file.read())
+    array = np.frombuffer(buffer=pipe.stdout.read(), dtype=np.float32)
+    meta = pipe.stderr.read().split(b"Output")[-1]
+    match = re.search(rb'(\d+) Hz', meta)
+    sampling_rate = int(match.group(1))
+    if b'stereo' in meta:
+        array = np.array([array[::2], array[1::2]])
+    return array, sampling_rate
